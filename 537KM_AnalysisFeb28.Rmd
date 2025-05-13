@@ -1,0 +1,267 @@
+---
+title: "537 KM analysis"
+author: "Celina White"
+date: "2024-12-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library("ggplot2")
+library("tidyverse")
+library("survival")
+library("survminer")
+library("car")
+library("dplyr")
+library("coxme")
+library("lme4")
+library("gridExtra")
+```
+
+```{r}
+longevityall=read.csv("/Users/celinawhite/Downloads/longevity/Sorted Data/537 Longevity sorted data.csv")
+longevityall$Cage.ID <- as.factor(longevityall$Cage.ID)
+longevityall$Density <- as.factor(longevityall$Density)
+longevityall$Sex <- as.factor(longevityall$Sex)
+longevityall$Virgin <- as.factor(longevityall$Virgin)
+longevityall$Yeast <- as.factor(longevityall$Yeast)
+longevityall$Density <- as.factor(longevityall$Density)
+```
+
+
+```{r}
+#subsets for virgin no yeast, virgin yeast, mated no yeast, mated yeast
+
+#sex
+females <- subset(longevityall, Sex=="F")
+males <- subset(longevityall, Sex=="M")
+
+#sex x virginity
+Vfemales <- subset(females, Virgin=="Y")
+Mfemales <- subset(females, Virgin=="N")
+Vmales <- subset(males, Virgin=="Y")
+Mmales <- subset(males, Virgin=="N")
+
+
+#sex x virginity x yeast
+VYfemales <- subset(Vfemales, Yeast=="Y")
+VNfemales <- subset(Vfemales, Yeast=="N")
+VYmales <- subset(Vmales, Yeast=="Y") 
+VNmales <- subset (Vmales, Yeast=="N") 
+
+MYfemales <- subset(Mfemales, Yeast=="Y") 
+MNfemales <- subset(Mfemales, Yeast=="N")
+MYmales <- subset(Mmales, Yeast=="Y") 
+MNmales <- subset(Mmales, Yeast=="N") 
+```
+
+
+
+```{r}
+longallMSE<- longevityall %>%
+  group_by(Virgin, Yeast, Sex) %>%  
+  mutate(mean_life=mean(Day),
+         se_life = sd(Day) / sqrt(n()))
+
+ggplot(longallMSE, aes(x = Sex, y = mean_life, fill = Sex)) +
+  geom_col(position = "dodge", color="black") +
+  theme_classic() +
+   geom_errorbar(aes(ymin = mean_life - se_life, ymax = mean_life + se_life), width = 0.2, position = position_dodge(0.9)) +  
+  labs(title = "Bar Graph with Error Bars M", x = "Day", y = "Average Body Weight (mg)") +
+  facet_wrap(~ factor(interaction(Virgin, Yeast), 
+                       levels = c("Y.N", "Y.Y", "N.N", "N.Y"))) +
+  scale_fill_manual(values = c("M" = "#a8d0e6","F" = "#f76c6c")) +
+  scale_y_continuous(limits = c(0, 80))
+```
+
+
+```{r}
+VYfemales <- subset(Vfemales, Yeast=="Y") %>% 
+  select(Day)
+VNfemales <- subset(Vfemales, Yeast=="N") %>% 
+  select(Day)
+VYmales <- subset(Vmales, Yeast=="Y") %>% 
+  select(Day)
+VNmales <- subset (Vmales, Yeast=="N") %>% 
+  select(Day)
+
+MYfemales <- subset(Mfemales, Yeast=="Y") %>% 
+  select(Day)
+MNfemales <- subset(Mfemales, Yeast=="N") %>% 
+  select(Day)
+MYmales <- subset(Mmales, Yeast=="Y") %>% 
+  select(Day)
+MNmales <- subset(Mmales, Yeast=="N") %>% 
+  select(Day)
+```
+
+
+```{r}
+# t-test for virgin no yeast
+t_test_VN <- t.test(VYmales, VNmales)
+print(t_test_VN)
+```
+
+```{r}
+# t-test for virgin  yeast
+t_test_VY <- t.test(VYfemales, VYmales)
+print(t_test_VY)
+```
+
+```{r}
+# t-test for mated no yeast
+t_test_MN <- t.test(MNfemales, MNmales)
+print(t_test_MN)
+```
+
+```{r}
+# t-test for mated yeast
+t_test_MY <- t.test(MYfemales, MYmales)
+print(t_test_MY)
+```
+```{r}
+# t-test for other
+t_test <- t.test(VNmales, VYmales)
+print(t_test)
+```
+
+################################################################################
+
+```{r}
+#KM survival
+km_fit_all <- survfit(Surv(Day,Event) ~ Sex + Virgin + Yeast, data=longevityall) 
+summary(km_fit_all)
+ggsurvplot(km_fit_all, conf.int = TRUE, palette = c("lightpink1", "lightpink3", "hotpink", "deeppink4", "lightskyblue", "#2E9FDF", "blue1", "navyblue"), data=longevityall)
+longevityall<-droplevels(longevityall)
+cox_model_all <- coxme(Surv(Day,Event) ~ Sex*Virgin*Yeast+(1|Cage.ID), data=droplevels(longevityall))
+summary(cox_model_all)
+```
+
+
+
+
+
+
+```{r}
+Anova(cox_model_all)
+```
+
+
+
+
+#############################################################################
+FEMALE FECUNIDITY
+
+```{r}
+fecundity_df=read.csv("/Users/celinawhite/Downloads/longevity/537femalefecundity.csv")
+
+ggplot(data=fecundity_df) +
+  geom_boxplot(aes(x=as.factor(day), y=Av.1F, fill=Yeast)) +
+  theme_classic()  +
+   scale_fill_manual(values = c("N" = "#f8e9a1", "Y" = "#f76c6c"))
+
+
+```
+
+
+
+
+```{r}
+fec_model <- lmer(Av.1F ~ as.factor(day)*Yeast + (1|cage), data=fecundity_df)
+summary(fec_model)
+Anova(fec_model)
+```
+
+
+
+###########################################################################
+BODY WEIGHTS
+
+```{r}
+Bodyweight=read.csv("/Users/celinawhite/Downloads/longevity/537BodyWeights.csv")
+
+Bodyweight$Treatment <- as.factor(Bodyweight$Treatment)
+Bodyweight$Day <- as.factor(Bodyweight$Day)
+```
+
+```{r}
+BodyWeightMod <- lmer(AvBody ~ Day + Sex*Mating*Yeast + (1|CageID), data=Bodyweight)
+summary(BodyWeightMod)
+Anova(BodyWeightMod)
+```
+
+
+```{r}
+Bodyweight <- Bodyweight %>%
+  group_by(Day, Mating, Yeast, Sex) %>%  
+  mutate(mean_weight=mean(AvBody),
+         se_weight = sd(AvBody) / sqrt(n()))  
+```
+
+
+```{r}
+BWfemales <- subset(Bodyweight, Sex=="F")
+BWmales <- subset(Bodyweight,Sex=="M")
+```
+
+
+```{r}
+#female plot
+plotBWF<- ggplot(BWfemales, aes(x = Day, y = mean_weight, fill = interaction(Mating, Yeast))) +
+  geom_col(position = "dodge", color="black") +
+  theme_classic() +
+   geom_errorbar(aes(ymin = mean_weight - se_weight, ymax = mean_weight + se_weight), width = 0.2, position = position_dodge(0.9)) +  # Error bars
+  labs(title = "Bar Graph with Error Bars F", x = "Day", y = "Average Body Weight (mg)") +
+   scale_fill_manual(values = c("N.N" = "#f8e9a1", "Y.N" = "#f76c6c", "N.Y" = "#a8d0e6", "Y.Y" = "#374785"))
+
+```
+
+
+```{r}
+#male plot
+
+plotBWM <- ggplot(BWmales, aes(x = Day, y = mean_weight, fill = interaction(Mating, Yeast))) +
+  geom_col(position = "dodge", color="black") +
+  theme_classic() +
+   geom_errorbar(aes(ymin = mean_weight - se_weight, ymax = mean_weight + se_weight), width = 0.2, position = position_dodge(0.9)) +  # Error bars
+  labs(title = "Bar Graph with Error Bars M", x = "Day", y = "Average Body Weight (mg)") +
+   scale_fill_manual(values = c("N.N" = "#f8e9a1", "Y.N" = "#f76c6c", "N.Y" = "#a8d0e6", "Y.Y" = "#374785")) +
+   scale_y_continuous(limits = c(0, 0.4))
+  
+```
+
+```{r}
+gridExtra::grid.arrange(plotBWF,plotBWM)
+```
+
+```{r}
+#female plot
+plotBWF2<- ggplot(BWfemales, aes(Day, y = AvBody, fill = interaction(Mating,Yeast))) +
+  geom_boxplot() +
+  theme_classic()  +
+  labs( x= "Day", y="Average Body Weight (mg)") +
+scale_fill_manual(values = c("N.N" = "#f8e9a1", "Y.N" = "#f76c6c", "N.Y" = "#a8d0e6", "Y.Y" = "#374785")) 
+
+```
+
+
+```{r}
+#male plot
+
+plotBWM2<- ggplot(BWmales, aes(Day, y = AvBody, fill = interaction(Mating,Yeast))) +
+  geom_boxplot() +
+  theme_classic()  +
+  labs( x= "Day", y="Average Body Weight (mg)") +
+scale_fill_manual(values = c("N.N" = "#f8e9a1", "Y.N" = "#f76c6c", "N.Y" = "#a8d0e6", "Y.Y" = "#374785")) 
+
+```
+
+```{r}
+gridExtra::grid.arrange(plotBWF2,plotBWM2)
+```
+
+
+

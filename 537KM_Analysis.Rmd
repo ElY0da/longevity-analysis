@@ -1,0 +1,117 @@
+---
+title: "537 KM analysis"
+author: "Celina White"
+date: "2024-12-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library("ggplot2")
+library("tidyverse")
+library("survival")
+library("survminer")
+library("car")
+library("dplyr")
+library("coxme")
+library("lme4")
+```
+
+```{r}
+longevityall=read.csv("./537 Longevity sorted data.csv")
+
+longevityall$Cage.ID <- as.factor(longevityall$Cage.ID)
+longevityall$Sex <- as.factor(longevityall$Sex)
+longevityall$Virgin <- as.factor(longevityall$Virgin)
+longevityall$Yeast <- as.factor(longevityall$Yeast)
+longevityall$Density <- as.factor(longevityall$Density)
+```
+
+
+```{r}
+females <- subset(longevityall,Sex=="F")
+males <- subset(longevityall,Sex=="M")
+
+
+Vfemales <- subset(females, Virgin=="Y") %>% 
+  select(Day)
+
+Vmales <- subset(males, Virgin=="Y") %>% 
+  select(Day)
+
+
+Mfemales <- subset(females, Virgin=="N") %>% 
+  select(Day)
+
+Mmales <- subset(males, Virgin=="N") %>% 
+  select(Day)
+
+```
+
+```{r}
+#means of virgin females, virgin males, mated females, and mated males
+mean(Vfemales$Day)
+mean(Vmales$Day)
+mean(Mfemales$Day)
+mean(Mmales$Day)
+```
+
+```{r}
+# t-test for virgin average longevity
+t_test_virgins <- t.test(Vfemales, Vmales)
+print(t_test_virgins)
+```
+
+```{r}
+# t-test for mated average longevity
+t_test_mated <- t.test(Mfemales, Mmales)
+print(t_test_mated)
+```
+
+```{r}
+#KM survival
+km_fit_all <- survfit(Surv(Day,Event) ~ Sex + Virgin + Yeast, data=longevityall) 
+summary(km_fit_all)
+ggsurvplot(km_fit_all, conf.int = TRUE, palette = c("lightpink1", "lightpink3", "hotpink", "deeppink4", "lightskyblue", "#2E9FDF", "blue1", "navyblue"), data=longevityall)
+longevityall<-droplevels(longevityall)
+cox_model_all <- coxme(Surv(Day,Event) ~ Sex*Virgin*Yeast+(1|Cage.ID), data=droplevels(longevityall))
+summary(cox_model_all)
+```
+```{r}
+Anova(cox_model_all)
+```
+
+```{r}
+fecundity_df=read.csv("./537femalefecundity.csv")
+ggplot(data=fecundity_df) +
+  geom_boxplot(aes(x=as.factor(day), y=Av.1F, fill=Yeast))
+```
+
+```{r}
+fec_model <- lmer(Av.1F ~ day*Yeast + (1|cage), data=fecundity_df)
+summary(fec_model)
+Anova(fec_model)
+```
+```{r}
+fec_model <- lmer(Av.1F ~ as.factor(day)*Yeast + (1|cage), data=fecundity_df)
+summary(fec_model)
+Anova(fec_model)
+```
+
+```{r}
+body_size=read.csv("537BodyWeights.csv")
+ggplot(data=body_size %>% filter(Sex=='M')) +
+  geom_boxplot(aes(x=as.factor(Day), y=AvBody, fill=as.factor(Treatment)))
+ggplot(data=body_size %>% filter(Sex=='F')) +
+  geom_boxplot(aes(x=as.factor(Day), y=AvBody, fill=as.factor(Treatment)))
+```
+
+```{r}
+bdsz_model <- lmer(AvBody ~ as.factor(Day) + Sex*Mating*Yeast + (1|CageID), data=body_size)
+summary(bdsz_model)
+Anova(bdsz_model)
+```
+
